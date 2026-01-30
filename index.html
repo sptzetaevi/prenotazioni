@@ -112,17 +112,27 @@ function closeModal() {
   document.getElementById("modal").style.display = "none";
 }
 
+<script>
 function confirmBooking() {
+  const fullName = document.getElementById("fullName").value.trim();
+  const group = document.getElementById("group").value;
+  const subgroup = document.getElementById("subgroup").value.trim();
+
+  if (!fullName) {
+    alert("Inserisci nome e cognome");
+    return;
+  }
+
   const payload = {
     row: selectedRow,
-    fullName: document.getElementById("fullName").value,
-    group: document.getElementById("group").value,
-    subgroup: document.getElementById("subgroup").value
+    fullName,
+    group,
+    subgroup
   };
 
+  // IMPORTANTE: niente headers application/json -> evita preflight CORS
   fetch(API, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
     body: JSON.stringify(payload)
   })
   .then(r => r.json())
@@ -130,12 +140,19 @@ function confirmBooking() {
     if (res.ok) {
       alert("Prenotazione confermata");
       closeModal();
+      document.getElementById("fullName").value = "";
+      document.getElementById("subgroup").value = "";
       loadSlots();
     } else {
-      alert(res.error);
+      alert(res.error || "Errore nella prenotazione");
     }
+  })
+  .catch(err => {
+    console.error(err);
+    alert("Errore di rete/CORS. Apri Console (F12) per dettagli.");
   });
 }
+</script>
 
 loadSlots();
 </script>
