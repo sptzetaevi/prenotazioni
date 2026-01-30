@@ -4,83 +4,29 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Prenotazione slot Webex</title>
-
 <style>
-  body {
-    font-family: Arial, sans-serif;
-    padding: 20px;
-    line-height: 1.4;
-  }
-  h2 { margin-top: 0; }
-
-  table {
-    border-collapse: collapse;
-    width: 100%;
-    margin-top: 15px;
-  }
-  th, td {
-    border: 1px solid #ccc;
-    padding: 8px;
-    text-align: center;
-  }
+  body { font-family: Arial, sans-serif; padding: 20px; line-height: 1.4; }
+  table { border-collapse: collapse; width: 100%; margin-top: 15px; }
+  th, td { border: 1px solid #ccc; padding: 8px; text-align: center; }
   th { background: #f0f0f0; }
+  .busy { color: #666; font-size: 0.95em; }
 
-  .busy {
-    color: #666;
-    font-size: 0.95em;
-  }
+  button { padding: 6px 10px; cursor: pointer; }
+  button[disabled] { opacity: .6; cursor: not-allowed; }
 
-  button {
-    padding: 6px 10px;
-    cursor: pointer;
-  }
-
-  .modal {
-    display: none;
-    position: fixed;
-    inset: 0;
-    background: rgba(0,0,0,0.5);
-    align-items: center;
-    justify-content: center;
-  }
-  .modal-content {
-    background: #fff;
-    padding: 20px;
-    max-width: 420px;
-    width: 100%;
-    border-radius: 8px;
-  }
-
-  label {
-    display: block;
-    margin-top: 12px;
-    text-align: left;
-  }
-  input {
-    width: 100%;
-    padding: 8px;
-    margin-top: 6px;
-    box-sizing: border-box;
-  }
-
-  .actions {
-    margin-top: 15px;
-    display: flex;
-    gap: 10px;
-    justify-content: flex-end;
-  }
-
-  .status {
-    margin-top: 10px;
-    font-size: 14px;
-  }
+  .modal { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.5);
+           align-items: center; justify-content: center; padding: 12px; }
+  .modal-content { background: #fff; padding: 18px; max-width: 440px; width: 100%; border-radius: 8px; }
+  label { display: block; margin-top: 12px; text-align: left; }
+  input, select { width: 100%; padding: 8px; margin-top: 6px; box-sizing: border-box; }
+  .actions { margin-top: 14px; display: flex; gap: 10px; justify-content: flex-end; }
+  .status { margin-top: 10px; font-size: 14px; }
   .error { color: #b00020; }
   .ok { color: #0a7a0a; }
 </style>
 </head>
 
 <body>
-
 <h2>Prenotazione slot Webex</h2>
 <p>Gli slot entro 24 ore vengono automaticamente bloccati.</p>
 
@@ -96,19 +42,30 @@
   <tbody></tbody>
 </table>
 
-<!-- MODALE -->
 <div class="modal" id="modal">
   <div class="modal-content">
     <h3>Prenota slot</h3>
-    <div id="slotInfo" style="font-size:14px; margin-bottom:8px;"></div>
+    <div id="slotInfo" style="font-size:14px;margin-bottom:6px;"></div>
 
     <label>Nome e cognome
       <input id="fullName" placeholder="Es. Mario Rossi">
     </label>
 
+    <label>Email
+      <input id="email" type="email" placeholder="nome.cognome@esempio.it">
+    </label>
+
+    <label>Gruppo
+      <select id="group">
+        <option>K primo grado</option>
+        <option>L primo grado</option>
+        <option>D secondo grado</option>
+      </select>
+    </label>
+
     <div class="actions">
-      <button id="cancelBtn">Annulla</button>
-      <button id="confirmBtn">Conferma</button>
+      <button id="cancelBtn" type="button">Annulla</button>
+      <button id="confirmBtn" type="button">Conferma</button>
     </div>
 
     <div class="status" id="modalStatus"></div>
@@ -116,8 +73,7 @@
 </div>
 
 <script>
-const API =
-  "https://script.google.com/macros/s/AKfycbz_IvjAGirhFh89_1bvnU267cGdMSPyObvKL8Hm3lh0l6kdCITRHXUzRznnjgoNv95GdA/exec";
+const API = "https://script.google.com/macros/s/AKfycbz_IvjAGirhFh89_1bvnU267cGdMSPyObvKL8Hm3lh0l6kdCITRHXUzRznnjgoNv95GdA/exec";
 
 let selectedRow = null;
 
@@ -126,11 +82,14 @@ const modal = document.getElementById("modal");
 const slotInfo = document.getElementById("slotInfo");
 const modalStatus = document.getElementById("modalStatus");
 const fullNameInput = document.getElementById("fullName");
+const emailInput = document.getElementById("email");
+const groupSelect = document.getElementById("group");
 const confirmBtn = document.getElementById("confirmBtn");
 const cancelBtn = document.getElementById("cancelBtn");
 
 function escapeHtml(s) {
   return (s || "")
+    .toString()
     .replaceAll("&", "&amp;")
     .replaceAll("<", "&lt;")
     .replaceAll(">", "&gt;")
@@ -143,30 +102,28 @@ function loadSlots() {
     .then(r => r.json())
     .then(data => {
       tbody.innerHTML = "";
+      (data.slots || []).forEach(s => {
+        const isBusy = (s.status || "").toUpperCase() === "OCCUPATO";
+        const name = (s.name || "").trim();
 
-      data.slots.forEach(s => {
         const tr = document.createElement("tr");
-        const isBusy = s.status === "OCCUPATO";
-
         tr.innerHTML = `
           <td>${escapeHtml(s.date)}</td>
           <td>${escapeHtml(s.time)}</td>
           <td class="busy">
-            ${
-              isBusy
-                ? `Occupato${s.name ? " – " + escapeHtml(s.name) : ""}`
-                : "Libero"
-            }
+            ${isBusy ? `Occupato${name ? " – " + escapeHtml(name) : ""}` : "Libero"}
           </td>
           <td>
-            ${
-              isBusy
-                ? "—"
-                : `<button onclick="openModal(${s.row}, '${escapeHtml(s.date)} ${escapeHtml(s.time)}')">Prenota</button>`
-            }
+            ${isBusy ? "—" : `<button type="button" data-row="${s.row}" data-label="${escapeHtml(s.date)} ${escapeHtml(s.time)}">Prenota</button>`}
           </td>
         `;
         tbody.appendChild(tr);
+      });
+
+      tbody.querySelectorAll("button[data-row]").forEach(btn => {
+        btn.addEventListener("click", () => {
+          openModal(parseInt(btn.dataset.row, 10), btn.dataset.label);
+        });
       });
     });
 }
@@ -175,8 +132,11 @@ function openModal(row, label) {
   selectedRow = row;
   slotInfo.textContent = "Stai prenotando: " + label;
   modalStatus.textContent = "";
+  modalStatus.className = "status";
   modal.style.display = "flex";
   fullNameInput.value = "";
+  emailInput.value = "";
+  groupSelect.selectedIndex = 0;
   fullNameInput.focus();
 }
 
@@ -189,8 +149,16 @@ function closeModal() {
 
 function confirmBooking() {
   const fullName = fullNameInput.value.trim();
+  const email = emailInput.value.trim();
+  const group = groupSelect.value;
+
   if (!fullName) {
     modalStatus.textContent = "Inserisci nome e cognome";
+    modalStatus.className = "status error";
+    return;
+  }
+  if (!email) {
+    modalStatus.textContent = "Inserisci una email valida";
     modalStatus.className = "status error";
     return;
   }
@@ -201,20 +169,14 @@ function confirmBooking() {
 
   fetch(API, {
     method: "POST",
-    body: JSON.stringify({
-      row: selectedRow,
-      fullName: fullName
-    })
+    body: JSON.stringify({ row: selectedRow, fullName, email, group })
   })
   .then(r => r.json())
   .then(res => {
     if (res.ok) {
-      modalStatus.textContent = "Prenotazione confermata";
+      modalStatus.textContent = "Prenotazione confermata. Ti arriverà anche una mail.";
       modalStatus.className = "status ok";
-      setTimeout(() => {
-        closeModal();
-        loadSlots();
-      }, 400);
+      setTimeout(() => { closeModal(); loadSlots(); }, 450);
     } else {
       modalStatus.textContent = res.error || "Errore";
       modalStatus.className = "status error";
@@ -232,12 +194,9 @@ function confirmBooking() {
 
 cancelBtn.addEventListener("click", closeModal);
 confirmBtn.addEventListener("click", confirmBooking);
-modal.addEventListener("click", e => {
-  if (e.target === modal) closeModal();
-});
+modal.addEventListener("click", e => { if (e.target === modal) closeModal(); });
 
 loadSlots();
 </script>
-
 </body>
 </html>
