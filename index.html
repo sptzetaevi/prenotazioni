@@ -3,32 +3,120 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>PRENOTAZIONE sportelli TIC con ALESSANDRO ZANZOt Webex</title>
-<style>
-  body { font-family: Arial, sans-serif; padding: 20px; line-height: 1.4; }
-  table { border-collapse: collapse; width: 100%; margin-top: 15px; }
-  th, td { border: 1px solid #ccc; padding: 8px; text-align: center; }
-  th { background: #f0f0f0; }
-  .busy { color: #666; font-size: 0.95em; }
-  a { word-break: break-all; }
-  button { padding: 6px 10px; cursor: pointer; }
-  button[disabled] { opacity: .6; cursor: not-allowed; }
 
-  .modal { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.5);
-           align-items: center; justify-content: center; padding: 12px; }
-  .modal-content { background: #fff; padding: 18px; max-width: 440px; width: 100%; border-radius: 8px; }
-  label { display: block; margin-top: 12px; text-align: left; }
-  input, select { width: 100%; padding: 8px; margin-top: 6px; box-sizing: border-box; }
-  .actions { margin-top: 14px; display: flex; gap: 10px; justify-content: flex-end; }
-  .status { margin-top: 10px; font-size: 14px; }
+<!-- TITOLO SCHEDA BROWSER -->
+<title>Prenotazione sportello TIC di Alessandro Zanzo</title>
+
+<style>
+  body {
+    font-family: Arial, sans-serif;
+    padding: 20px;
+    line-height: 1.4;
+  }
+
+  table {
+    border-collapse: collapse;
+    width: 100%;
+    margin-top: 15px;
+  }
+
+  th, td {
+    border: 1px solid #ccc;
+    padding: 8px;
+    text-align: center;
+  }
+
+  th { background: #f0f0f0; }
+
+  /* COLORI STATI */
+  .stato-libero {
+    background: #e8f5e9;
+    color: #1b5e20;
+    font-weight: bold;
+  }
+
+  .stato-occupato {
+    background: #fdecea;
+    color: #8e0000;
+    font-weight: bold;
+  }
+
+  .stato-scaduto {
+    background: #fff8e1;
+    color: #7a5b00;
+    font-weight: bold;
+  }
+
+  a { word-break: break-all; }
+
+  button {
+    padding: 6px 10px;
+    cursor: pointer;
+  }
+
+  button[disabled] {
+    opacity: .6;
+    cursor: not-allowed;
+  }
+
+  /* MODALE */
+  .modal {
+    display: none;
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,0.5);
+    align-items: center;
+    justify-content: center;
+    padding: 12px;
+  }
+
+  .modal-content {
+    background: #fff;
+    padding: 18px;
+    max-width: 440px;
+    width: 100%;
+    border-radius: 8px;
+  }
+
+  label {
+    display: block;
+    margin-top: 12px;
+    text-align: left;
+  }
+
+  input, select {
+    width: 100%;
+    padding: 8px;
+    margin-top: 6px;
+    box-sizing: border-box;
+  }
+
+  .actions {
+    margin-top: 14px;
+    display: flex;
+    gap: 10px;
+    justify-content: flex-end;
+  }
+
+  .status {
+    margin-top: 10px;
+    font-size: 14px;
+  }
+
   .error { color: #b00020; }
   .ok { color: #0a7a0a; }
 </style>
 </head>
 
 <body>
-<h2>Prenotazione slot Webex</h2>
-<p> È possibile prenotare uno slot "libero" entro 24 ore prima dell'effettivo appuntamento.</p>
+
+<!-- TITOLO VISIBILE -->
+<h2>Prenotazione sportello TIC di Alessandro Zanzo</h2>
+
+<p>
+  Gli slot verdi sono prenotabili.  
+  Gli slot gialli non sono più prenotabili perché entro 24 ore.  
+</p>
 
 <table id="slots">
   <thead>
@@ -98,20 +186,19 @@ function escapeHtml(s) {
     .replaceAll("'", "&#039;");
 }
 
-// Trasforma qualunque valore gruppo in K/L/D (robusto anche se dal backend arriva "K PRIMO GRADO", ecc.)
-function groupLetter(groupValue) {
-  const g = (groupValue || "").toString().trim().toUpperCase();
+function groupLetter(g) {
+  if (!g) return "";
+  g = g.toUpperCase();
   if (g.startsWith("K")) return "K";
   if (g.startsWith("L")) return "L";
   if (g.startsWith("D")) return "D";
-  return ""; // se non c'è, non mostra nulla
+  return "";
 }
 
-function webexLinkCell(webexUrl) {
-  const url = (webexUrl || "").toString().trim();
+function webexLink(url) {
   if (!url) return "—";
   const safe = escapeHtml(url);
-  return `<a href="${safe}" target="_blank" rel="noopener noreferrer"> Vai alla stanza Webex per lo sportello</a>`;
+  return `<a href="${safe}" target="_blank">Vai alla stanza Webex per lo sportello</a>`;
 }
 
 function loadSlots() {
@@ -119,37 +206,48 @@ function loadSlots() {
     .then(r => r.json())
     .then(data => {
       tbody.innerHTML = "";
+
       (data.slots || []).forEach(s => {
-        const statusUp = (s.status || "").toString().trim().toUpperCase();
-        const isBusy = statusUp === "OCCUPATO";
+        const slotDT = new Date(s.date + "T" + s.time);
+        const hoursDiff = (slotDT - new Date()) / 36e5;
 
-        const gLetter = groupLetter(s.group); // <-- usa il gruppo dal backend
+        const isExpired =
+          s.status === "OCCUPATO" &&
+          hoursDiff <= 24 &&
+          !s.group;
 
-        // Colonna Stato: Occupato – K/L/D
-        const statusText = isBusy
-          ? `Occupato${gLetter ? " – " + gLetter : ""}`
-          : "Libero";
+        const isBooked =
+          s.status === "OCCUPATO" && !isExpired;
 
-        // Colonna Azione: se occupato mostra Webex, se libero mostra Prenota
-        const actionHtml = isBusy
-          ? webexLinkCell(s.webex)
-          : `<button type="button" data-row="${s.row}" data-label="${escapeHtml(s.date)} ${escapeHtml(s.time)}">Prenota</button>`;
+        let statoText = "";
+        let statoClass = "";
+        let actionHtml = "—";
+
+        if (isExpired) {
+          statoText = "Scaduto";
+          statoClass = "stato-scaduto";
+        } else if (isBooked) {
+          statoText = "Occupato – " + groupLetter(s.group);
+          statoClass = "stato-occupato";
+          actionHtml = webexLink(s.webex);
+        } else {
+          statoText = "Prenotabile";
+          statoClass = "stato-libero";
+          actionHtml = `<button data-row="${s.row}" data-label="${escapeHtml(s.date)} ${escapeHtml(s.time)}">Prenota</button>`;
+        }
 
         const tr = document.createElement("tr");
         tr.innerHTML = `
           <td>${escapeHtml(s.date)}</td>
           <td>${escapeHtml(s.time)}</td>
-          <td class="${isBusy ? "busy" : ""}">${statusText}</td>
+          <td class="${statoClass}">${statoText}</td>
           <td>${actionHtml}</td>
         `;
         tbody.appendChild(tr);
       });
 
-      // collega i bottoni
-      tbody.querySelectorAll("button[data-row]").forEach(btn => {
-        btn.addEventListener("click", () => {
-          openModal(parseInt(btn.dataset.row, 10), btn.dataset.label);
-        });
+      tbody.querySelectorAll("button[data-row]").forEach(b => {
+        b.onclick = () => openModal(b.dataset.row, b.dataset.label);
       });
     });
 }
@@ -157,18 +255,11 @@ function loadSlots() {
 function openModal(row, label) {
   selectedRow = row;
   slotInfo.textContent = "Stai prenotando: " + label;
-  modalStatus.textContent = "";
-  modalStatus.className = "status";
   modal.style.display = "flex";
-  fullNameInput.value = "";
-  emailInput.value = "";
-  groupSelect.selectedIndex = 0;
-  fullNameInput.focus();
 }
 
 function closeModal() {
   modal.style.display = "none";
-  selectedRow = null;
   confirmBtn.disabled = false;
   confirmBtn.textContent = "Conferma";
 }
@@ -178,22 +269,15 @@ function confirmBooking() {
   const email = emailInput.value.trim();
   const group = groupSelect.value;
 
-  if (!fullName) {
-    modalStatus.textContent = "Inserisci nome e cognome";
-    modalStatus.className = "status error";
-    return;
-  }
-  if (!email) {
-    modalStatus.textContent = "Inserisci una email valida";
+  if (!fullName || !email) {
+    modalStatus.textContent = "Compila tutti i campi";
     modalStatus.className = "status error";
     return;
   }
 
   confirmBtn.disabled = true;
   confirmBtn.textContent = "Invio…";
-  modalStatus.textContent = "";
 
-  // NB: niente header application/json -> evita preflight/CORS con Apps Script
   fetch(API, {
     method: "POST",
     body: JSON.stringify({ row: selectedRow, fullName, email, group })
@@ -201,29 +285,24 @@ function confirmBooking() {
   .then(r => r.json())
   .then(res => {
     if (res.ok) {
-      modalStatus.textContent = "Prenotazione confermata.";
+      modalStatus.textContent = "Prenotazione confermata";
       modalStatus.className = "status ok";
-      setTimeout(() => { closeModal(); loadSlots(); }, 450);
+      setTimeout(() => { closeModal(); loadSlots(); }, 500);
     } else {
-      modalStatus.textContent = res.error || "Errore";
+      modalStatus.textContent = res.error;
       modalStatus.className = "status error";
       confirmBtn.disabled = false;
       confirmBtn.textContent = "Conferma";
     }
-  })
-  .catch(() => {
-    modalStatus.textContent = "Errore di rete";
-    modalStatus.className = "status error";
-    confirmBtn.disabled = false;
-    confirmBtn.textContent = "Conferma";
   });
 }
 
-cancelBtn.addEventListener("click", closeModal);
-confirmBtn.addEventListener("click", confirmBooking);
-modal.addEventListener("click", e => { if (e.target === modal) closeModal(); });
+cancelBtn.onclick = closeModal;
+confirmBtn.onclick = confirmBooking;
+modal.onclick = e => { if (e.target === modal) closeModal(); };
 
 loadSlots();
 </script>
+
 </body>
 </html>
