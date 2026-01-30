@@ -10,7 +10,7 @@
   th, td { border: 1px solid #ccc; padding: 8px; text-align: center; }
   th { background: #f0f0f0; }
   .busy { color: #666; font-size: 0.95em; }
-
+  a { word-break: break-all; }
   button { padding: 6px 10px; cursor: pointer; }
   button[disabled] { opacity: .6; cursor: not-allowed; }
 
@@ -42,6 +42,7 @@
   <tbody></tbody>
 </table>
 
+<!-- MODALE PRENOTAZIONE -->
 <div class="modal" id="modal">
   <div class="modal-content">
     <h3>Prenota slot</h3>
@@ -97,29 +98,54 @@ function escapeHtml(s) {
     .replaceAll("'", "&#039;");
 }
 
+// Trasforma qualunque valore gruppo in K/L/D (robusto anche se dal backend arriva "K PRIMO GRADO", ecc.)
+function groupLetter(groupValue) {
+  const g = (groupValue || "").toString().trim().toUpperCase();
+  if (g.startsWith("K")) return "K";
+  if (g.startsWith("L")) return "L";
+  if (g.startsWith("D")) return "D";
+  return ""; // se non c'è, non mostra nulla
+}
+
+function webexLinkCell(webexUrl) {
+  const url = (webexUrl || "").toString().trim();
+  if (!url) return "—";
+  const safe = escapeHtml(url);
+  return `<a href="${safe}" target="_blank" rel="noopener noreferrer">Apri Webex</a>`;
+}
+
 function loadSlots() {
   fetch(API + "?action=list")
     .then(r => r.json())
     .then(data => {
       tbody.innerHTML = "";
       (data.slots || []).forEach(s => {
-        const isBusy = (s.status || "").toUpperCase() === "OCCUPATO";
-        const name = (s.name || "").trim();
+        const statusUp = (s.status || "").toString().trim().toUpperCase();
+        const isBusy = statusUp === "OCCUPATO";
+
+        const gLetter = groupLetter(s.group); // <-- usa il gruppo dal backend
+
+        // Colonna Stato: Occupato – K/L/D
+        const statusText = isBusy
+          ? `Occupato${gLetter ? " – " + gLetter : ""}`
+          : "Libero";
+
+        // Colonna Azione: se occupato mostra Webex, se libero mostra Prenota
+        const actionHtml = isBusy
+          ? webexLinkCell(s.webex)
+          : `<button type="button" data-row="${s.row}" data-label="${escapeHtml(s.date)} ${escapeHtml(s.time)}">Prenota</button>`;
 
         const tr = document.createElement("tr");
         tr.innerHTML = `
           <td>${escapeHtml(s.date)}</td>
           <td>${escapeHtml(s.time)}</td>
-          <td class="busy">
-            ${isBusy ? `Occupato${name ? " – " + escapeHtml(name) : ""}` : "Libero"}
-          </td>
-          <td>
-            ${isBusy ? "—" : `<button type="button" data-row="${s.row}" data-label="${escapeHtml(s.date)} ${escapeHtml(s.time)}">Prenota</button>`}
-          </td>
+          <td class="${isBusy ? "busy" : ""}">${statusText}</td>
+          <td>${actionHtml}</td>
         `;
         tbody.appendChild(tr);
       });
 
+      // collega i bottoni
       tbody.querySelectorAll("button[data-row]").forEach(btn => {
         btn.addEventListener("click", () => {
           openModal(parseInt(btn.dataset.row, 10), btn.dataset.label);
@@ -167,6 +193,7 @@ function confirmBooking() {
   confirmBtn.textContent = "Invio…";
   modalStatus.textContent = "";
 
+  // NB: niente header application/json -> evita preflight/CORS con Apps Script
   fetch(API, {
     method: "POST",
     body: JSON.stringify({ row: selectedRow, fullName, email, group })
@@ -174,7 +201,7 @@ function confirmBooking() {
   .then(r => r.json())
   .then(res => {
     if (res.ok) {
-      modalStatus.textContent = "Prenotazione confermata. Ti arriverà anche una mail.";
+      modalStatus.textContent = "Prenotazione confermata.";
       modalStatus.className = "status ok";
       setTimeout(() => { closeModal(); loadSlots(); }, 450);
     } else {
