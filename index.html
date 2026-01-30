@@ -1,303 +1,242 @@
 <!DOCTYPE html>
 <html lang="it">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1"/>
-  <title>Prenotazione slot Webex</title>
-  <style>
-    body { font-family: Arial, sans-serif; padding: 20px; line-height: 1.3; }
-    h2 { margin: 0 0 10px; }
-    .note { color: #555; font-size: 14px; }
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Prenotazione slot Webex</title>
 
-    table { border-collapse: collapse; width: 100%; margin-top: 16px; }
-    th, td { border: 1px solid #ccc; padding: 8px; text-align: center; }
-    th { background: #f0f0f0; }
-    .busy { color: #888; }
+<style>
+  body {
+    font-family: Arial, sans-serif;
+    padding: 20px;
+    line-height: 1.4;
+  }
+  h2 { margin-top: 0; }
 
-    button { padding: 6px 10px; cursor: pointer; }
-    button[disabled] { opacity: 0.6; cursor: not-allowed; }
+  table {
+    border-collapse: collapse;
+    width: 100%;
+    margin-top: 15px;
+  }
+  th, td {
+    border: 1px solid #ccc;
+    padding: 8px;
+    text-align: center;
+  }
+  th { background: #f0f0f0; }
 
-    .modal {
-      display: none;
-      position: fixed;
-      inset: 0;
-      background: rgba(0,0,0,0.5);
-      align-items: center;
-      justify-content: center;
-      padding: 12px;
-    }
-    .modal-content {
-      background: #fff;
-      width: 100%;
-      max-width: 440px;
-      padding: 18px;
-      border-radius: 8px;
-      box-shadow: 0 10px 30px rgba(0,0,0,0.2);
-    }
-    label { display: block; margin-top: 10px; text-align: left; }
-    input, select, textarea {
-      width: 100%;
-      padding: 8px;
-      margin-top: 6px;
-      box-sizing: border-box;
-      border: 1px solid #ccc;
-      border-radius: 6px;
-      font-size: 14px;
-    }
-    textarea { min-height: 80px; resize: vertical; }
+  .busy {
+    color: #666;
+    font-size: 0.95em;
+  }
 
-    .row-actions {
-      display: flex;
-      gap: 10px;
-      margin-top: 14px;
-      justify-content: flex-end;
-    }
-    .statusbar {
-      margin-top: 10px;
-      font-size: 14px;
-      color: #333;
-    }
-    .error { color: #b00020; }
-    .ok { color: #0a7a0a; }
-  </style>
+  button {
+    padding: 6px 10px;
+    cursor: pointer;
+  }
+
+  .modal {
+    display: none;
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,0.5);
+    align-items: center;
+    justify-content: center;
+  }
+  .modal-content {
+    background: #fff;
+    padding: 20px;
+    max-width: 420px;
+    width: 100%;
+    border-radius: 8px;
+  }
+
+  label {
+    display: block;
+    margin-top: 12px;
+    text-align: left;
+  }
+  input {
+    width: 100%;
+    padding: 8px;
+    margin-top: 6px;
+    box-sizing: border-box;
+  }
+
+  .actions {
+    margin-top: 15px;
+    display: flex;
+    gap: 10px;
+    justify-content: flex-end;
+  }
+
+  .status {
+    margin-top: 10px;
+    font-size: 14px;
+  }
+  .error { color: #b00020; }
+  .ok { color: #0a7a0a; }
+</style>
 </head>
 
 <body>
-  <h2>Prenotazione slot Webex</h2>
-  <div class="note">
-    Se uno slot è <b>entro 24 ore</b>, viene automaticamente impostato come <b>OCCUPATO</b>.
-  </div>
 
-  <div class="statusbar" id="statusbar"></div>
+<h2>Prenotazione slot Webex</h2>
+<p>Gli slot entro 24 ore vengono automaticamente bloccati.</p>
 
-  <table id="slots">
-    <thead>
-      <tr>
-        <th>Data</th>
-        <th>Ora</th>
-        <th>Stato</th>
-        <th>Azione</th>
-      </tr>
-    </thead>
-    <tbody></tbody>
-  </table>
+<table id="slots">
+  <thead>
+    <tr>
+      <th>Data</th>
+      <th>Ora</th>
+      <th>Stato</th>
+      <th>Azione</th>
+    </tr>
+  </thead>
+  <tbody></tbody>
+</table>
 
-  <!-- MODALE PRENOTAZIONE -->
-  <div class="modal" id="modal">
-    <div class="modal-content">
-      <h3 style="margin:0 0 8px;">Prenota slot</h3>
-      <div class="note" id="slotInfo" style="margin-bottom:6px;"></div>
+<!-- MODALE -->
+<div class="modal" id="modal">
+  <div class="modal-content">
+    <h3>Prenota slot</h3>
+    <div id="slotInfo" style="font-size:14px; margin-bottom:8px;"></div>
 
-      <label>Nome e cognome
-        <input id="fullName" placeholder="Es. Mario Rossi" autocomplete="name" />
-      </label>
+    <label>Nome e cognome
+      <input id="fullName" placeholder="Es. Mario Rossi">
+    </label>
 
-      <label>Gruppo
-        <select id="group">
-          <option>Di secondo grado</option>
-          <option>K Savigliano primo grado</option>
-          <option>Lx Savigliano primo grado</option>
-        </select>
-      </label>
-
-      <label>Sottogruppo / colleghi (campo libero)
-        <textarea id="subgroup" placeholder="Es. Con Bianchi e Verdi"></textarea>
-      </label>
-
-      <div class="row-actions">
-        <button id="btnCancel" type="button">Annulla</button>
-        <button id="btnConfirm" type="button">Conferma</button>
-      </div>
-
-      <div class="statusbar" id="modalStatus"></div>
+    <div class="actions">
+      <button id="cancelBtn">Annulla</button>
+      <button id="confirmBtn">Conferma</button>
     </div>
+
+    <div class="status" id="modalStatus"></div>
   </div>
+</div>
 
 <script>
-  // === IMPOSTA QUI L’URL DEL TUO APPS SCRIPT (è già il tuo) ===
-  const API = "https://script.google.com/macros/s/AKfycbz_IvjAGirhFh89_1bvnU267cGdMSPyObvKL8Hm3lh0l6kdCITRHXUzRznnjgoNv95GdA/exec";
+const API =
+  "https://script.google.com/macros/s/AKfycbz_IvjAGirhFh89_1bvnU267cGdMSPyObvKL8Hm3lh0l6kdCITRHXUzRznnjgoNv95GdA/exec";
 
-  let selectedRow = null;
-  let selectedLabel = "";
+let selectedRow = null;
 
-  const statusbar = document.getElementById("statusbar");
-  const modal = document.getElementById("modal");
-  const modalStatus = document.getElementById("modalStatus");
-  const slotInfo = document.getElementById("slotInfo");
+const tbody = document.querySelector("#slots tbody");
+const modal = document.getElementById("modal");
+const slotInfo = document.getElementById("slotInfo");
+const modalStatus = document.getElementById("modalStatus");
+const fullNameInput = document.getElementById("fullName");
+const confirmBtn = document.getElementById("confirmBtn");
+const cancelBtn = document.getElementById("cancelBtn");
 
-  const fullNameEl = document.getElementById("fullName");
-  const groupEl = document.getElementById("group");
-  const subgroupEl = document.getElementById("subgroup");
+function escapeHtml(s) {
+  return (s || "")
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("'", "&#039;");
+}
 
-  const btnCancel = document.getElementById("btnCancel");
-  const btnConfirm = document.getElementById("btnConfirm");
+function loadSlots() {
+  fetch(API + "?action=list")
+    .then(r => r.json())
+    .then(data => {
+      tbody.innerHTML = "";
 
-  function setStatus(msg, kind="") {
-    statusbar.className = "statusbar " + (kind || "");
-    statusbar.textContent = msg || "";
-  }
-
-  function setModalStatus(msg, kind="") {
-    modalStatus.className = "statusbar " + (kind || "");
-    modalStatus.textContent = msg || "";
-  }
-
-  function escapeHtml(s) {
-    return (s ?? "").toString()
-      .replaceAll("&", "&amp;")
-      .replaceAll("<", "&lt;")
-      .replaceAll(">", "&gt;")
-      .replaceAll('"', "&quot;")
-      .replaceAll("'", "&#039;");
-  }
-
-  async function loadSlots() {
-    setStatus("Caricamento slot…");
-    const tbody = document.querySelector("#slots tbody");
-    tbody.innerHTML = "";
-
-    try {
-      const r = await fetch(API + "?action=list");
-      const data = await r.json();
-
-      if (!data.ok) {
-        setStatus("Errore: " + (data.error || "impossibile caricare"), "error");
-        return;
-      }
-
-      // Ordina per data+ora (stringhe yyyy-mm-dd e HH:mm -> va bene)
-      const slots = (data.slots || []).slice().sort((a,b) => {
-        const ad = (a.date || "") + " " + (a.time || "");
-        const bd = (b.date || "") + " " + (b.time || "");
-        return ad.localeCompare(bd);
-      });
-
-      slots.forEach(s => {
+      data.slots.forEach(s => {
         const tr = document.createElement("tr");
-        const status = (s.status || "").toUpperCase();
-        const isBusy = status === "OCCUPATO";
+        const isBusy = s.status === "OCCUPATO";
 
         tr.innerHTML = `
           <td>${escapeHtml(s.date)}</td>
           <td>${escapeHtml(s.time)}</td>
-          <td class="${isBusy ? "busy" : ""}">${escapeHtml(status)}</td>
+          <td class="busy">
+            ${
+              isBusy
+                ? `Occupato${s.name ? " – " + escapeHtml(s.name) : ""}`
+                : "Libero"
+            }
+          </td>
           <td>
-            ${!isBusy
-              ? `<button type="button" data-row="${s.row}" data-label="${escapeHtml(s.date)} ${escapeHtml(s.time)}">Prenota</button>`
-              : "—"}
+            ${
+              isBusy
+                ? "—"
+                : `<button onclick="openModal(${s.row}, '${escapeHtml(s.date)} ${escapeHtml(s.time)}')">Prenota</button>`
+            }
           </td>
         `;
         tbody.appendChild(tr);
       });
+    });
+}
 
-      // collega i bottoni
-      tbody.querySelectorAll("button[data-row]").forEach(btn => {
-        btn.addEventListener("click", () => {
-          const row = parseInt(btn.getAttribute("data-row"), 10);
-          const label = btn.getAttribute("data-label") || "";
-          openModal(row, label);
-        });
-      });
+function openModal(row, label) {
+  selectedRow = row;
+  slotInfo.textContent = "Stai prenotando: " + label;
+  modalStatus.textContent = "";
+  modal.style.display = "flex";
+  fullNameInput.value = "";
+  fullNameInput.focus();
+}
 
-      setStatus("Slot caricati.");
-    } catch (err) {
-      console.error(err);
-      setStatus("Errore di rete durante il caricamento. Apri Console (F12) per dettagli.", "error");
-    }
+function closeModal() {
+  modal.style.display = "none";
+  selectedRow = null;
+  confirmBtn.disabled = false;
+  confirmBtn.textContent = "Conferma";
+}
+
+function confirmBooking() {
+  const fullName = fullNameInput.value.trim();
+  if (!fullName) {
+    modalStatus.textContent = "Inserisci nome e cognome";
+    modalStatus.className = "status error";
+    return;
   }
 
-  function openModal(row, label) {
-    selectedRow = row;
-    selectedLabel = label;
+  confirmBtn.disabled = true;
+  confirmBtn.textContent = "Invio…";
+  modalStatus.textContent = "";
 
-    slotInfo.textContent = "Stai prenotando: " + label;
-    setModalStatus("");
-
-    // reset campi
-    fullNameEl.value = "";
-    subgroupEl.value = "";
-    groupEl.selectedIndex = 0;
-
-    // mostra modale
-    modal.style.display = "flex";
-    fullNameEl.focus();
-  }
-
-  function closeModal() {
-    modal.style.display = "none";
-    selectedRow = null;
-    selectedLabel = "";
-    setModalStatus("");
-    btnConfirm.disabled = false;
-    btnConfirm.textContent = "Conferma";
-  }
-
-  async function confirmBooking() {
-    const fullName = fullNameEl.value.trim();
-    const group = groupEl.value;              // il server normalizza in maiuscolo
-    const subgroup = subgroupEl.value.trim();
-
-    if (!selectedRow) {
-      setModalStatus("Errore: slot non selezionato.", "error");
-      return;
-    }
-    if (!fullName) {
-      setModalStatus("Inserisci nome e cognome.", "error");
-      return;
-    }
-
-    const payload = {
+  fetch(API, {
+    method: "POST",
+    body: JSON.stringify({
       row: selectedRow,
-      fullName: fullName,
-      group: group,
-      subgroup: subgroup
-    };
-
-    try {
-      btnConfirm.disabled = true;
-      btnConfirm.textContent = "Invio…";
-      setModalStatus("Invio prenotazione…");
-
-      // IMPORTANTISSIMO: niente header application/json -> evita preflight/CORS
-      const r = await fetch(API, {
-        method: "POST",
-        body: JSON.stringify(payload)
-      });
-
-      const res = await r.json();
-
-      if (res.ok) {
-        setModalStatus("Prenotazione confermata.", "ok");
-        // chiudi e ricarica elenco
-        setTimeout(() => {
-          closeModal();
-          loadSlots();
-        }, 400);
-      } else {
-        setModalStatus(res.error || "Errore nella prenotazione.", "error");
-        btnConfirm.disabled = false;
-        btnConfirm.textContent = "Conferma";
-      }
-
-    } catch (err) {
-      console.error(err);
-      setModalStatus("Errore di rete/CORS. Apri Console (F12) per dettagli.", "error");
-      btnConfirm.disabled = false;
-      btnConfirm.textContent = "Conferma";
+      fullName: fullName
+    })
+  })
+  .then(r => r.json())
+  .then(res => {
+    if (res.ok) {
+      modalStatus.textContent = "Prenotazione confermata";
+      modalStatus.className = "status ok";
+      setTimeout(() => {
+        closeModal();
+        loadSlots();
+      }, 400);
+    } else {
+      modalStatus.textContent = res.error || "Errore";
+      modalStatus.className = "status error";
+      confirmBtn.disabled = false;
+      confirmBtn.textContent = "Conferma";
     }
-  }
-
-  // Eventi modale
-  btnCancel.addEventListener("click", closeModal);
-  btnConfirm.addEventListener("click", confirmBooking);
-
-  // Chiudi cliccando fuori
-  modal.addEventListener("click", (e) => {
-    if (e.target === modal) closeModal();
+  })
+  .catch(() => {
+    modalStatus.textContent = "Errore di rete";
+    modalStatus.className = "status error";
+    confirmBtn.disabled = false;
+    confirmBtn.textContent = "Conferma";
   });
+}
 
-  // Carica subito gli slot
-  loadSlots();
+cancelBtn.addEventListener("click", closeModal);
+confirmBtn.addEventListener("click", confirmBooking);
+modal.addEventListener("click", e => {
+  if (e.target === modal) closeModal();
+});
+
+loadSlots();
 </script>
 
 </body>
