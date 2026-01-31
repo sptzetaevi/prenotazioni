@@ -246,7 +246,7 @@ function loadSlots() {
 
         const tr = document.createElement("tr");
         tr.innerHTML = `
-          <td>${escapeHtml(s.date)}</td>
+          <td>${escapeHtml(formatDateIT(s.date))}</td>
           <td>${escapeHtml(s.time)}</td>
           <td class="${statoClass}">${statoText}</td>
           <td>${actionHtml}</td>
