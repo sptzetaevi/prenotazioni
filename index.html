@@ -227,7 +227,8 @@ function loadSlots() {
           statoText = "Scaduto";
           statoClass = "stato-scaduto";
         } else if (isBooked) {
-          statoText = "Occupato – " + groupLetter(s.group);
+          const nome = s.name ? " – " + escapeHtml(s.name) : "";
+          statoText = "Occupato – " + groupLetter(s.group) + nome;
           statoClass = "stato-occupato";
           actionHtml = webexLink(s.webex);
         } else {
