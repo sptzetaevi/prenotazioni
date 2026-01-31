@@ -201,6 +201,13 @@ function webexLink(url) {
   return `<a href="${safe}" target="_blank">Vai alla stanza Webex per lo sportello</a>`;
 }
 
+  function formatDateIT(dateStr) {
+  // atteso: YYYY-MM-DD
+  if (!dateStr || !dateStr.includes("-")) return dateStr;
+  const [y, m, d] = dateStr.split("-");
+  return `${d}/${m}/${y}`;
+}
+
 function loadSlots() {
   fetch(API + "?action=list")
     .then(r => r.json())
