@@ -62,6 +62,7 @@
   /* MODALE */
   .modal {
     display: none;
+    z-index: 9999;
     position: fixed;
     inset: 0;
     background: rgba(0,0,0,0.5);
@@ -105,6 +106,10 @@
 
   .error { color: #b00020; }
   .ok { color: #0a7a0a; }
+
+  /* UX: riga di caricamento + nota cache */
+  .loading-row { color: #555; font-style: italic; }
+  #cacheNote { margin: 6px 0 0; color: #666; font-size: 13px; }
 </style>
 </head>
 
@@ -117,6 +122,7 @@
   Gli slot verdi sono prenotabili.  
   Gli slot gialli non sono più prenotabili perché entro 24 ore.  
 </p>
+<p id="cacheNote" style="display:none;"></p>
 
 <table id="slots">
   <thead>
@@ -127,7 +133,9 @@
       <th>Azione</th>
     </tr>
   </thead>
-  <tbody></tbody>
+  <tbody>
+    <tr class="loading-row"><td colspan="4">Caricamento…</td></tr>
+  </tbody>
 </table>
 
 <!-- MODALE PRENOTAZIONE -->
@@ -176,14 +184,10 @@ const groupSelect = document.getElementById("group");
 const confirmBtn = document.getElementById("confirmBtn");
 const cancelBtn = document.getElementById("cancelBtn");
 
+const _escDiv = document.createElement("div");
 function escapeHtml(s) {
-  return (s || "")
-    .toString()
-    .replaceAll("&", "&amp;")
-    .replaceAll("<", "&lt;")
-    .replaceAll(">", "&gt;")
-    .replaceAll('"', "&quot;")
-    .replaceAll("'", "&#039;");
+  _escDiv.textContent = (s == null) ? "" : String(s);
+  return _escDiv.innerHTML;
 }
 
 function groupLetter(g) {
@@ -208,57 +212,132 @@ function webexLink(url) {
   return `${d}/${m}/${y}`;
 }
 
-function loadSlots() {
+
+const cacheNote = document.getElementById("cacheNote");
+const CACHE_KEY = "slots_cache_v1_" + API;
+
+function readCache() {
+  try {
+    const raw = localStorage.getItem(CACHE_KEY);
+    if (!raw) return null;
+    return JSON.parse(raw);
+  } catch {
+    return null;
+  }
+}
+function writeCache(slots) {
+  try {
+    localStorage.setItem(CACHE_KEY, JSON.stringify({ ts: Date.now(), slots }));
+  } catch {
+    // ignore
+  }
+}
+
+// Rendering veloce: costruisce tutte le righe e poi le inserisce in una sola volta
+function renderSlots(slots, fromCache=false, cacheAgeMs=0) {
+  if (!Array.isArray(slots) || slots.length === 0) {
+    tbody.innerHTML = `<tr><td colspan="4">Nessuno slot disponibile.</td></tr>`;
+    if (cacheNote) cacheNote.style.display = "none";
+    return;
+  }
+
+  const now = new Date();
+  let html = "";
+
+  slots.forEach(s => {
+    const slotDT = new Date(String(s.date) + "T" + String(s.time || "00:00"));
+    const hoursDiff = (slotDT - now) / 36e5;
+
+    const isExpired =
+      String(s.status || "").toUpperCase() === "OCCUPATO" &&
+      hoursDiff <= 24 &&
+      !s.group;
+
+    const isBooked =
+      String(s.status || "").toUpperCase() === "OCCUPATO" && !isExpired;
+
+    let statoText = "";
+    let statoClass = "";
+    let actionHtml = "—";
+
+    if (isExpired) {
+      statoText = "Scaduto";
+      statoClass = "stato-scaduto";
+      actionHtml = "—";
+    } else if (isBooked) {
+      const nome = s.name ? " – " + escapeHtml(s.name) : "";
+      statoText = "Occupato – " + groupLetter(s.group) + nome;
+      statoClass = "stato-occupato";
+      actionHtml = webexLink(s.webex);
+    } else {
+      statoText = "Prenotabile";
+      statoClass = "stato-libero";
+      actionHtml = `<button data-row="${escapeHtml(s.row)}" data-label="${escapeHtml(formatDateIT(s.date))} ${escapeHtml(s.time)}">Prenota</button>`;
+    }
+
+    html += `
+      <tr>
+        <td>${escapeHtml(formatDateIT(s.date))}</td>
+        <td>${escapeHtml(s.time)}</td>
+        <td class="${statoClass}">${statoText}</td>
+        <td>${actionHtml}</td>
+      </tr>
+    `;
+  });
+
+  tbody.innerHTML = html;
+
+  tbody.querySelectorAll("button[data-row]").forEach(b => {
+    b.onclick = () => openModal(b.dataset.row, b.dataset.label);
+  });
+
+  if (cacheNote) {
+    if (fromCache) {
+      const sec = Math.max(1, Math.round(cacheAgeMs / 1000));
+      cacheNote.textContent = `Mostro una copia rapida (cache). Aggiornamento in corso… (cache: ${sec}s)`;
+      cacheNote.style.display = "block";
+    } else {
+      cacheNote.style.display = "none";
+    }
+  }
+}
+
+function loadSlots(softRefresh=false) {
+  if (!softRefresh) {
+    tbody.innerHTML = `<tr class="loading-row"><td colspan="4">Caricamento…</td></tr>`;
+  }
+
   fetch(API + "?action=list")
     .then(r => r.json())
     .then(data => {
-      tbody.innerHTML = "";
-
-      (data.slots || []).forEach(s => {
-        const slotDT = new Date(s.date + "T" + s.time);
-        const hoursDiff = (slotDT - new Date()) / 36e5;
-
-        const isExpired =
-          s.status === "OCCUPATO" &&
-          hoursDiff <= 24 &&
-          !s.group;
-
-        const isBooked =
-          s.status === "OCCUPATO" && !isExpired;
-
-        let statoText = "";
-        let statoClass = "";
-        let actionHtml = "—";
-
-        if (isExpired) {
-          statoText = "Scaduto";
-          statoClass = "stato-scaduto";
-        } else if (isBooked) {
-          const nome = s.name ? " – " + escapeHtml(s.name) : "";
-          statoText = "Occupato – " + groupLetter(s.group) + nome;
-          statoClass = "stato-occupato";
-          actionHtml = webexLink(s.webex);
-        } else {
-          statoText = "Prenotabile";
-          statoClass = "stato-libero";
-          actionHtml = `<button data-row="${s.row}" data-label="${escapeHtml(s.date)} ${escapeHtml(s.time)}">Prenota</button>`;
-        }
-
-        const tr = document.createElement("tr");
-        tr.innerHTML = `
-          <td>${escapeHtml(formatDateIT(s.date))}</td>
-          <td>${escapeHtml(s.time)}</td>
-          <td class="${statoClass}">${statoText}</td>
-          <td>${actionHtml}</td>
-        `;
-        tbody.appendChild(tr);
-      });
-
-      tbody.querySelectorAll("button[data-row]").forEach(b => {
-        b.onclick = () => openModal(b.dataset.row, b.dataset.label);
-      });
+      const slots = (data && data.slots) ? data.slots : [];
+      writeCache(slots);
+      renderSlots(slots, false, 0);
+    })
+    .catch(err => {
+      console.error(err);
+      const cached = readCache();
+      if (cached && Array.isArray(cached.slots) && cached.slots.length) {
+        renderSlots(cached.slots, true, Date.now() - (cached.ts || Date.now()));
+      } else {
+        tbody.innerHTML = `<tr><td colspan="4">Errore nel caricamento: ${escapeHtml(err.message || err)}</td></tr>`;
+      }
     });
 }
+
+// UX istantanea:
+// 1) se c'è cache, renderizza subito e poi aggiorna in background
+// 2) se non c'è cache, fa il normale caricamento
+(function init() {
+  const cached = readCache();
+  if (cached && Array.isArray(cached.slots) && cached.slots.length) {
+    renderSlots(cached.slots, true, Date.now() - (cached.ts || Date.now()));
+    requestAnimationFrame(() => loadSlots(true));
+  } else {
+    loadSlots(false);
+  }
+})();
+
 
 function openModal(row, label) {
   selectedRow = row;
@@ -309,7 +388,10 @@ cancelBtn.onclick = closeModal;
 confirmBtn.onclick = confirmBooking;
 modal.onclick = e => { if (e.target === modal) closeModal(); };
 
-loadSlots();
+document.addEventListener('keydown', e => {
+  if (e.key === 'Escape' && modal.style.display === 'flex') closeModal();
+});
+
 </script>
 
 </body>
